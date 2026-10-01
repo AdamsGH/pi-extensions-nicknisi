@@ -650,7 +650,9 @@ describe('reconciliation and queued messages', () => {
     const huge = `Begin the long task. ${'CONTEXT '.repeat(30000)}`;
     await withFixture(
       {
-        contextWindow: 4000,
+        // Leave room for the summary, continuation, and tool definitions below
+        // the hard cutoff. The huge prompt still forces native compaction.
+        contextWindow: 8000,
         responses: [
           fauxAssistantMessage(fauxToolCall('self_compact', { note_to_self: NOTE })),
           summary(),
@@ -661,6 +663,8 @@ describe('reconciliation and queued messages', () => {
       async (fixture) => {
         await fixture.session.prompt(huge);
         await waitFor(() => readHandoffState(fixture.branch())?.phase === 'delivered', 20000);
+        // Journaled delivery does not mean the continuation's tools have finished.
+        await fixture.session.waitForIdle();
 
         const phases = statePhases(fixture.branch());
         // Reconciled by session_compact, never our own idle self-compaction.
@@ -669,6 +673,36 @@ describe('reconciliation and queued messages', () => {
         expect(compactionCount(fixture.branch())).toBe(1);
         expect(readDeliveredCycleIds(fixture.branch()).size).toBe(1);
         expect(readFileSync(join(fixture.dir, 'result.txt'), 'utf8')).toBe('done');
+      },
+    );
+  }, 40000);
+
+  it('keeps ordinary tools blocked when native compaction leaves context above the hard cutoff', async () => {
+    await withFixture(
+      {
+        contextWindow: 4000,
+        flags: { 'compact-soft-at': '20%', 'compact-at': '50%', 'compact-buffer': '10%' },
+        responses: [
+          fauxAssistantMessage(fauxToolCall('self_compact', { note_to_self: NOTE })),
+          summary(),
+          fauxAssistantMessage(fauxToolCall('write', { path: 'result.txt', content: 'done' })),
+          fauxAssistantMessage('No more tool calls.'),
+        ],
+      },
+      async (fixture) => {
+        await fixture.session.prompt(`Begin the long task. ${'CONTEXT '.repeat(30000)}`);
+        await waitFor(() => readHandoffState(fixture.branch())?.phase === 'delivered', 20000);
+        await fixture.session.waitForIdle();
+        const writeResult = fixture
+          .branch()
+          .filter((entry) => entry.type === 'message')
+          .map((entry) => entry.message)
+          .find((message) => message.role === 'toolResult' && message.toolName === 'write');
+        expect(compactionCount(fixture.branch())).toBe(1);
+        expect(readDeliveredCycleIds(fixture.branch()).size).toBe(1);
+        expect(writeResult).toMatchObject({ role: 'toolResult', toolName: 'write', isError: true });
+        expect(JSON.stringify(writeResult)).toContain('hard cutoff');
+        expect(existsSync(join(fixture.dir, 'result.txt'))).toBe(false);
       },
     );
   }, 40000);
