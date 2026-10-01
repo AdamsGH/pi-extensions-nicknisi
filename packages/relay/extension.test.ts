@@ -90,7 +90,7 @@ function delivery(l: Letter) {
   return { type: 'custom_message', customType: 'relay:delivery', details: l };
 }
 
-it('registered discovery, exact sessionId send, watch, and invalid-cursor recovery work together', async () => {
+it('registered discovery, exact sessionId send, watch, and invalid-limit recovery work together', async () => {
   const root = fixture();
   const p = peer();
   const host = start();
@@ -102,7 +102,7 @@ it('registered discovery, exact sessionId send, watch, and invalid-cursor recove
   const claim = claimInbox(root, p.addr)!;
   expect(readClaimedLetter(root, p.addr, claim.claimToken, claim.fileTokens[0]!)?.id).toBe(sent.details.messageId);
   expect((await host.run({ action: 'watch', to: p.sessionId })).content[0]!.text).toContain('Watching');
-  expect((await host.run({ action: 'list', cursor: 'garbage' })).details.outcome).toBe('error');
+  expect((await host.run({ action: 'list', limit: 0 })).details.outcome).toBe('error');
   expect((await host.run({ action: 'list', presence: 'all' })).details.outcome).toBe('success');
 });
 

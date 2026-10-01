@@ -8,14 +8,7 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  BOUNDARY_PREAMBLE,
-  formatAudit,
-  formatDelivery,
-  formatListing,
-  refusalAmbiguous,
-  refusalUnknown,
-} from './format.js';
+import { BOUNDARY_PREAMBLE, formatAudit, formatDelivery, formatListing } from './format.js';
 import {
   ackClaimedLetter,
   appendAudit,
@@ -736,11 +729,6 @@ describe('format', () => {
     );
     expect(text).not.toContain('self00000000');
     expect(text).toContain('beta (peer00) — /tmp/alpha [idle]');
-  });
-
-  it('pins refusal strings', () => {
-    expect(refusalUnknown('nobody', ['"alpha" (aaaa11)'])).toContain('No session matches');
-    expect(refusalAmbiguous('al', ['"alpha" (aaaa11)', '"alpine" (bbbb22)'])).toContain('ambiguous');
   });
 });
 

@@ -388,7 +388,7 @@ it('builds, packs, installs, and imports the real core package without Pi or TUI
   if (fs.existsSync(path.join(relayDir, 'node_modules'))) {
     fs.symlinkSync(path.join(relayDir, 'node_modules'), path.join(sourceRelay, 'node_modules'), 'dir');
   }
-  execFileSync(process.execPath, [path.join(sourceRoot, 'scripts', 'build.ts')], { cwd: sourceRoot, stdio: 'inherit' });
+  execFileSync(process.execPath, [path.join(sourceRoot, 'scripts', 'build.ts')], { cwd: sourceRoot, stdio: 'pipe' });
   execFileSync('pnpm', ['pack', '--out', tarball], { cwd: sourceRelay, stdio: 'pipe' });
   fs.writeFileSync(
     path.join(appDir, 'package.json'),
@@ -398,7 +398,7 @@ it('builds, packs, installs, and imports the real core package without Pi or TUI
       dependencies: { [packageJson.name]: 'file:../relay.tgz' },
     }),
   );
-  execFileSync('pnpm', ['install', '--offline', '--ignore-scripts'], { cwd: appDir, stdio: 'inherit' });
+  execFileSync('pnpm', ['install', '--offline', '--ignore-scripts'], { cwd: appDir, stdio: 'pipe' });
 
   const installedDir = path.join(appDir, 'node_modules', '@nicknisi', 'pi-relay');
   const installedPackage = JSON.parse(fs.readFileSync(path.join(installedDir, 'package.json'), 'utf8')) as RelayPackage;

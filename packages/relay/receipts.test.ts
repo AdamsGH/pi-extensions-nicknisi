@@ -146,7 +146,7 @@ it('expires proof for live sessions, retains malformed markers, and protects rec
     cwd: '/receiver',
     pid: process.pid,
     startedAt: now,
-    lastSeenAt: 0,
+    lastSeenAt: now - 60_000,
     status: 'idle',
     offline: true,
   });
@@ -154,6 +154,27 @@ it('expires proof for live sessions, retains malformed markers, and protects rec
   expect(fs.existsSync(path.join(root, `${addr}.json`))).toBe(true);
   fs.writeFileSync(path.join(root, `${addr}.acks`, 'malformed.json'), 'not proof');
   expect(sweepAcknowledgements(root, addr, now + SWEEP_MAIL_KEEP_MS + 1, SWEEP_MAIL_KEEP_MS)).toBe(1);
+});
+
+it('never lets retained proof pin an expired offline record', () => {
+  const root = fixture();
+  const now = Date.now();
+  writeRecord(root, {
+    addr,
+    sessionId: 'receiver',
+    name: 'receiver',
+    cwd: '/receiver',
+    pid: process.pid,
+    startedAt: 0,
+    lastSeenAt: now - SWEEP_MAIL_KEEP_MS - 1,
+    status: 'idle',
+    offline: true,
+  });
+  fs.mkdirSync(path.join(root, `${addr}.acks`));
+  fs.writeFileSync(path.join(root, `${addr}.acks`, 'malformed.json'), 'not proof');
+  sweep(root, now, () => true);
+  expect(fs.existsSync(path.join(root, `${addr}.json`))).toBe(false);
+  expect(fs.existsSync(path.join(root, `${addr}.acks`))).toBe(false);
 });
 
 it('uses the platform directory-removal flag for descriptor-relative cleanup', () => {
