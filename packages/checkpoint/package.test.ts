@@ -75,8 +75,13 @@ describe('packed contents', () => {
 
   beforeAll(() => {
     const out = execFileSync('npm', ['pack', '--dry-run', '--json'], { cwd: HERE, encoding: 'utf8' });
-    const parsed = JSON.parse(out) as Array<{ files: Array<{ path: string }> }>;
-    packed = parsed[0]?.files.map((f) => f.path) ?? [];
+    type PackManifest = { name: string; files: Array<{ path: string }> };
+    // npm <=11 returns an array; npm 12 keys manifests by package name.
+    const parsed = JSON.parse(out) as PackManifest[] | Record<string, PackManifest>;
+    const manifests = Array.isArray(parsed) ? parsed : Object.values(parsed);
+    const manifest = manifests.find((candidate) => candidate.name === pkg.name);
+    if (!manifest) throw new Error(`npm pack returned no manifest for ${pkg.name}.`);
+    packed = manifest.files.map((file) => file.path);
   });
 
   it('includes the extension source and compiled entry', () => {
