@@ -180,3 +180,29 @@ it('restores an offline queued letter and emits an exact durable receipt', async
   const { awaitReceipt } = await import('./mailbox.js');
   expect(await awaitReceipt(root, self, l, 1800)).toBe('delivered');
 });
+
+it('settles a waiting ask on shutdown and clears tracking for the original sender', async () => {
+  const root = fixture();
+  const p = peer();
+  const host = start();
+  writeRecord(root, p);
+  const waiting = host.run({ action: 'ask', to: p.sessionId, message: 'shutdown fixture', timeoutMs: 1000 });
+  await Promise.resolve();
+  host.emit('session_shutdown');
+  expect((await waiting).content[0]!.text).toContain('session shutdown');
+  expect(pendingAsks(root, deriveAddr('/work', 'self'))).toEqual([]);
+});
+
+it('does not register a late ask waiter when shutdown happens during the delivery receipt', async () => {
+  const root = fixture();
+  const p = peer();
+  p.offline = false;
+  const host = start();
+  writeRecord(root, p);
+  const started = Date.now();
+  const waiting = host.run({ action: 'ask', to: p.sessionId, message: 'receipt shutdown fixture', timeoutMs: 120000 });
+  await Promise.resolve();
+  host.emit('session_shutdown');
+  expect((await waiting).content[0]!.text).toContain('session shutdown');
+  expect(Date.now() - started).toBeLessThan(4500);
+});

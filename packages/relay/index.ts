@@ -184,6 +184,7 @@ export default function relay(pi: ExtensionAPI) {
   let unwatch: (() => void) | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let initialDrain: ReturnType<typeof setTimeout> | undefined;
+  let sessionGeneration = 0;
   const askWaiters = new Map<string, (outcome: AskOutcome) => void>();
   // Backoff while the session can't accept mail: a requeued letter
   // re-fires the watcher, and without this a failing sendMessage would spin
@@ -482,6 +483,7 @@ export default function relay(pi: ExtensionAPI) {
   }
 
   pi.on('session_start', (_event, ctx: ExtensionContext) => {
+    sessionGeneration++;
     try {
       startupError = undefined;
       ensureRoot(root);
@@ -545,6 +547,7 @@ export default function relay(pi: ExtensionAPI) {
   pi.on('session_info_changed', () => writeSelf({ name: pi.getSessionName() ?? self?.name ?? 'Unnamed session' }));
 
   pi.on('session_shutdown', () => {
+    sessionGeneration++;
     writeSelf({ status: 'idle', offline: true });
     if (heartbeat) clearInterval(heartbeat);
     if (watchPoller) clearInterval(watchPoller);
@@ -656,6 +659,8 @@ export default function relay(pi: ExtensionAPI) {
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       if (!self) return toolResult(uninitializedText());
+      const senderAddr = self.addr;
+      const generation = sessionGeneration;
 
       switch (params.action) {
         case 'list':
@@ -712,6 +717,10 @@ export default function relay(pi: ExtensionAPI) {
             const failed: string[] = [];
             const receipts: Record<string, unknown>[] = [];
             for (const peer of peers) {
+              if (generation !== sessionGeneration) {
+                failed.push(`${JSON.stringify(peer.name)}: session shutdown`);
+                continue;
+              }
               const sent = await sendLetter(peer, 'message', params.message);
               if (sent.letter) {
                 ok.push(`${JSON.stringify(peer.name)} (${peer.addr}): ${sent.verdict}`);
@@ -733,18 +742,17 @@ export default function relay(pi: ExtensionAPI) {
             );
           }
           // ask: track outgoing + block for the reply
-          trackOutgoingAsk(root, self.addr, {
+          trackOutgoingAsk(root, senderAddr, {
             askId: sent.letter.id,
             toAddr: record.addr,
             body: params.message,
             ts: sent.letter.ts,
           });
-          const outcome = await waitForReply(
-            sent.letter.id,
-            Math.max(1000, params.timeoutMs ?? 120_000),
-            signal ?? undefined,
-          );
-          clearAsk(root, self.addr, sent.letter.id); // out- entry
+          const outcome: AskOutcome =
+            generation === sessionGeneration
+              ? await waitForReply(sent.letter.id, Math.max(1000, params.timeoutMs ?? 120_000), signal ?? undefined)
+              : { replied: false, reason: 'session shutdown' };
+          clearAsk(root, senderAddr, sent.letter.id); // out- entry
           if (!outcome.replied)
             return toolResult(`Ask ${sent.letter.id.slice(0, 8)} to "${record.name}": ${outcome.reason}.`);
           return toolResult(`"${record.name}" replied:\n\n${outcome.body}`);
@@ -769,7 +777,7 @@ export default function relay(pi: ExtensionAPI) {
             );
           const sent = await sendLetter(asker, 'reply', params.message, target.id);
           if (!sent.letter) return toolResult(sent.error!);
-          if (target.ask) clearAsk(root, self.addr, target.id);
+          if (target.ask) clearAsk(root, senderAddr, target.id);
           return toolResult(
             `Replied to "${asker.name}" (${target.ask ? 'ask' : 'message'} ${target.id.slice(0, 8)}): ${sent.verdict}.`,
             { messageId: sent.letter.id, replyTo: target.id, target: target.addr, receipt: sent.receipt },
