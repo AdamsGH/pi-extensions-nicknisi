@@ -249,14 +249,14 @@ describe('mailbox', () => {
     expect(drain(root, addr).map((l) => l.body)).toEqual(['good']);
   });
 
-  it('receipt: delivered when the letter vanishes, queued when it stays', async () => {
+  it('receipt: destructive drain leaves delivery uncertain, remaining letters stay queued', async () => {
     const root = tmpRoot();
     const addr = 'inbox0000003';
     const l1 = letter({ id: 'rcpt-1', ts: Date.now() });
     deposit(root, addr, l1);
     const drained = drain(root, addr); // receiver takes it
     expect(drained).toHaveLength(1);
-    expect(await awaitReceipt(root, addr, l1, 400)).toBe('delivered');
+    expect(await awaitReceipt(root, addr, l1, 400)).toBe('uncertain');
 
     const l2 = letter({ id: 'rcpt-2', ts: Date.now() + 1 });
     deposit(root, addr, l2);

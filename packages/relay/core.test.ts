@@ -377,7 +377,7 @@ it('builds, packs, installs, and imports the real core package without Pi or TUI
       dependencies: { [packageJson.name]: 'file:../relay.tgz' },
     }),
   );
-  execFileSync('pnpm', ['install', '--offline', '--ignore-scripts'], { cwd: appDir, stdio: 'pipe' });
+  execFileSync('pnpm', ['install', '--offline', '--ignore-scripts'], { cwd: appDir, stdio: 'inherit' });
 
   const installedDir = path.join(appDir, 'node_modules', '@nicknisi', 'pi-relay');
   const installedPackage = JSON.parse(fs.readFileSync(path.join(installedDir, 'package.json'), 'utf8')) as RelayPackage;
@@ -387,6 +387,8 @@ it('builds, packs, installs, and imports the real core package without Pi or TUI
     expect(fs.existsSync(path.join(installedDir, target))).toBe(true);
   }
   expect(fs.existsSync(path.join(installedDir, 'filesystem.ts'))).toBe(true);
+  expect(fs.existsSync(path.join(installedDir, 'discovery.ts'))).toBe(true);
+  expect(fs.existsSync(path.join(installedDir, 'routing.ts'))).toBe(true);
   expect(packageJson.peerDependenciesMeta['@earendil-works/pi-coding-agent']?.optional).toBe(true);
   expect(packageJson.peerDependenciesMeta['@earendil-works/pi-tui']?.optional).toBe(true);
   expect(fs.existsSync(path.join(appDir, 'node_modules', '@earendil-works', 'pi-coding-agent'))).toBe(false);
